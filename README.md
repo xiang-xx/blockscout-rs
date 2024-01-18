@@ -1,5 +1,6 @@
 <h1 align="center">Blockscout Rust Services</h1>
 
+
 <a href="https://github.com/blockscout/blockscout-rs/actions/workflows/smart-contract-verifier.yml">
    <img src="https://img.shields.io/github/actions/workflow/status/blockscout/blockscout-rs/smart-contract-verifier.yml?branch=main&label=smart-contract-verifier&logo=github&style=plastic">
 </a> 
