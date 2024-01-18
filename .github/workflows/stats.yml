@@ -14,8 +14,8 @@ on:
 name: Test, lint and docker (stats)
 
 env:
-  REGISTRY: ghcr.io
-  IMAGE_NAME: blockscout/stats
+  REGISTRY: docker.io
+  IMAGE_NAME: xiangxx/blockscout-stats
 
 defaults:
   run:
@@ -137,8 +137,8 @@ jobs:
         uses: docker/login-action@v1
         with:
           registry: ${{ env.REGISTRY }}
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+          username: xiangxx
+          password: ${{ secrets.DOCKER_PASS }}
 
       - name: Extract metadata for Docker
         id: meta

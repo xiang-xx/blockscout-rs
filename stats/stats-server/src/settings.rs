@@ -35,13 +35,13 @@ impl Default for Settings {
             server: ServerSettings {
                 http: HttpServerSettings {
                     enabled: true,
-                    addr: SocketAddr::from_str("0.0.0.0:8050").unwrap(),
+                    addr: SocketAddr::from_str("[::]:8050").unwrap(),
                     max_body_size: 2 * 1024 * 1024, // 2 Mb - default Actix value
                     cors: Default::default(),
                 },
                 grpc: GrpcServerSettings {
                     enabled: false,
-                    addr: SocketAddr::from_str("0.0.0.0:8051").unwrap(),
+                    addr: SocketAddr::from_str("[::]:8051").unwrap(),
                 },
             },
             db_url: Default::default(),
