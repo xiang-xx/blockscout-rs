@@ -15,7 +15,7 @@ You can take a look at that subgraph and understand structure of our project mor
 
 1. Now you have to create file inside `protocols` directory decribing your procol. Use `example.protocol.yaml` as template.
 
-1. You can try to generate protocol desription file using `protocol-extractor`. This script will try to extract verified contracts from etherscan and determine their affiliation with the protocol:
+    **[EXPEREMENTAL]** You can try to generate protocol desription file using `protocol-extractor`. This script will try to extract verified   contracts from etherscan and determine their affiliation with the protocol:
 
     ```bash
     just try-build-protocol <protocol-name> <etherscan-endpoint-with-api-key> <addresses-of-contracts-comma-separated>
@@ -40,6 +40,13 @@ You can take a look at that subgraph and understand structure of our project mor
     In case of any error, adjust typescript code of subgraph. Also make sure subgraph handles events properly.
 
 1. Write your mappings: read [official subgraph guide](https://thegraph.com/docs/en/developing/creating-a-subgraph/#writing-mappings). You have to handle events of your protocol properly in order to index all blockchain data. You can use default mapping from generated template, however make sure that code is written correctly.
+
+1. Run default tests that will check name hashing logic
+
+    ```bash
+    # you can ommit -d flag to run tests without docker, but in case of MacOS we suggest you to use docker
+    yarn graph test -d
+    ```
 
 1. Now build subgraph code
   

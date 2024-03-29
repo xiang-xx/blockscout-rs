@@ -1,7 +1,11 @@
 use crate::types::user_op::{ListUserOp, UserOp};
 use blockscout_db::entity::blocks;
-use entity::user_operations::{ActiveModel, Column, Entity, Model};
+use entity::{
+    sea_orm_active_enums::EntryPointVersion,
+    user_operations::{ActiveModel, Column, Entity, Model},
+};
 use ethers::prelude::{Address, H256};
+use futures::{Stream, StreamExt};
 use sea_orm::{
     prelude::{BigDecimal, DateTime},
     sea_query::{Expr, IntoCondition, OnConflict},
@@ -18,6 +22,8 @@ struct TxHash {
 #[derive(FromQueryResult, Clone)]
 pub struct ListUserOpDB {
     pub hash: Vec<u8>,
+    pub entry_point: Vec<u8>,
+    pub entry_point_version: EntryPointVersion,
     pub block_number: i32,
     pub sender: Vec<u8>,
     pub transaction_hash: Vec<u8>,
@@ -65,9 +71,10 @@ pub async fn find_user_op_by_op_hash(
             let user_op = Model::from_query_result(&res, "")?;
             let mut user_op = UserOp::from(user_op);
             user_op.consensus = res.try_get("", "consensus")?;
-            user_op.timestamp = res
-                .try_get::<Option<DateTime>>("", "timestamp")?
-                .map(|t| t.timestamp() as u64);
+            user_op.timestamp = res.try_get::<Option<DateTime>>("", "timestamp")?.map(|t| {
+                t.and_utc()
+                    .to_rfc3339_opts(chrono::SecondsFormat::Micros, true)
+            });
             Some(user_op)
         }
     };
@@ -84,7 +91,7 @@ pub async fn list_user_ops(
     factory_filter: Option<Address>,
     tx_hash_filter: Option<H256>,
     entry_point_filter: Option<Address>,
-    bundle_index_filter: Option<u64>,
+    bundle_index_filter: Option<u32>,
     block_number_filter: Option<u64>,
     page_token: Option<(u64, H256)>,
     limit: u64,
@@ -94,6 +101,8 @@ pub async fn list_user_ops(
         .select_only()
         .columns([
             Column::Hash,
+            Column::EntryPoint,
+            Column::EntryPointVersion,
             Column::BlockNumber,
             Column::Sender,
             Column::TransactionHash,
@@ -185,14 +194,14 @@ pub async fn upsert_many(
     Ok(())
 }
 
-pub async fn find_unprocessed_logs_tx_hashes(
+pub async fn stream_unprocessed_logs_tx_hashes(
     db: &DatabaseConnection,
     addr: Address,
     topic: H256,
     from_block: u64,
     to_block: u64,
-) -> Result<Vec<H256>, anyhow::Error> {
-    let tx_hashes = TxHash::find_by_statement(Statement::from_sql_and_values(
+) -> Result<impl Stream<Item = H256> + '_, anyhow::Error> {
+    let missed_tx_stream = TxHash::find_by_statement(Statement::from_sql_and_values(
         DbBackend::Postgres,
         r#"
 SELECT DISTINCT logs.transaction_hash as transaction_hash
@@ -211,13 +220,19 @@ WHERE logs.address_hash    = $1
             to_block.into(),
         ],
     ))
-    .all(db)
+    .stream(db)
     .await?
-    .into_iter()
-    .map(|tx| H256::from_slice(&tx.transaction_hash))
-    .collect();
+    .filter_map(|tx| async {
+        match tx {
+            Ok(tx) => Some(H256::from_slice(&tx.transaction_hash)),
+            Err(err) => {
+                tracing::error!(error = ?err, "error during missed tx hash retrieval");
+                None
+            }
+        }
+    });
 
-    Ok(tx_hashes)
+    Ok(missed_tx_stream)
 }
 
 #[cfg(test)]
@@ -261,6 +276,7 @@ mod tests {
     #[tokio::test]
     async fn list_user_ops_ok() {
         let db = get_shared_db().await;
+        let entrypoint = Address::from_str("0x5FF137D4b0FDCD49DcA30c7CF57E578a026d2789").unwrap();
 
         let (items, next_page_token) = list_user_ops(
             &db, None, None, None, None, None, None, None, None, None, 5000,
@@ -315,19 +331,23 @@ mod tests {
             [
                 ListUserOp {
                     hash: H256::from_low_u64_be(0x6901),
+                    entry_point: entrypoint,
+                    entry_point_version: EntryPointVersion::V06,
                     block_number: 0,
                     sender: Address::from_low_u64_be(0x0502),
                     transaction_hash: H256::from_low_u64_be(0x0504),
-                    timestamp: 1704067200,
+                    timestamp: "2024-01-01T00:00:00.000000Z".to_string(),
                     status: true,
                     fee: U256::from(56001575011025u64),
                 },
                 ListUserOp {
                     hash: H256::from_low_u64_be(0x0501),
+                    entry_point: entrypoint,
+                    entry_point_version: EntryPointVersion::V06,
                     block_number: 0,
                     sender: Address::from_low_u64_be(0x0502),
                     transaction_hash: H256::from_low_u64_be(0x0504),
-                    timestamp: 1704067200,
+                    timestamp: "2024-01-01T00:00:00.000000Z".to_string(),
                     status: true,
                     fee: U256::from(56000075000025u64),
                 }
@@ -343,9 +363,11 @@ mod tests {
         let topic =
             H256::from_str("0x49628fd1471006c1482da88028e9ce4dbb080b815c9b0344d39e5a8e6ec1419f")
                 .unwrap();
-        let items = find_unprocessed_logs_tx_hashes(&db, entrypoint, topic, 100, 150)
+        let items: Vec<H256> = stream_unprocessed_logs_tx_hashes(&db, entrypoint, topic, 100, 150)
             .await
-            .unwrap();
+            .unwrap()
+            .collect()
+            .await;
         assert_eq!(items, [H256::from_low_u64_be(0xffff)]);
     }
 }

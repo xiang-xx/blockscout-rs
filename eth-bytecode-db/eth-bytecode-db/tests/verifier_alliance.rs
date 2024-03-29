@@ -15,16 +15,13 @@ use sea_orm::{
     ActiveValue::Set,
     DatabaseConnection, DatabaseTransaction, EntityTrait, TransactionTrait,
 };
-use smart_contract_verifier_proto::blockscout::smart_contract_verifier::v2::{
-    VerifyResponse, VerifySolidityStandardJsonRequest,
+use smart_contract_verifier_proto::{
+    blockscout::smart_contract_verifier::v2::{VerifyResponse, VerifySolidityStandardJsonRequest},
+    http_client::mock::{MockSolidityVerifierService, SmartContractVerifierServer},
 };
 use std::{future::Future, path::PathBuf, sync::Arc};
 use verification_test_helpers::{
-    init_db,
-    smart_contract_veriifer_mock::{MockSolidityVerifierService, SmartContractVerifierServer},
-    start_server_and_init_client,
-    verifier_alliance_types::TestCase,
-    VerifierService,
+    init_db, start_server_and_init_client, verifier_alliance_types::TestCase, VerifierService,
 };
 use verifier_alliance_entity::{
     code, compiled_contracts, contract_deployments, contracts, verified_contracts,
@@ -226,7 +223,7 @@ async fn insert_contract_deployment(txn: &DatabaseTransaction, test_case: &TestC
         address: Set(test_case.address.to_vec()),
         transaction_hash: Set(test_case.transaction_hash.to_vec()),
         block_number: Set(test_case.block_number.into()),
-        txindex: Set(test_case.transaction_index.into()),
+        transaction_index: Set(test_case.transaction_index.into()),
         deployer: Set(test_case.deployer.to_vec()),
         contract_id: Set(contract_id),
     }
@@ -339,8 +336,8 @@ async fn check_contract_deployment(db: &DatabaseConnection, test_case: &TestCase
         "Invalid contract_deployments.block_number"
     );
     assert_eq!(
-        test_case_transaction_index, contract_deployment.txindex,
-        "Invalid contract_deployments.txindex"
+        test_case_transaction_index, contract_deployment.transaction_index,
+        "Invalid contract_deployments.transaction_index"
     );
     assert_eq!(
         test_case.deployer.to_vec(),
